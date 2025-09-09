@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>💖 Snap & Smile Photobooth 💖</title>
+<style>
+:root{
+  --pink:#ff99ac; --pink-strong:#ff6f91; --bg1:#ffe6f0; --bg2:#e6f7ff;
+}
+body{
+  font-family:"Comic Sans MS","Trebuchet MS",Arial,sans-serif;
+  background: linear-gradient(135deg,var(--bg1),var(--bg2));
+  margin:0;padding:24px;
+  display:flex;align-items:flex-start;justify-content:center;min-height:100vh;
+}
+.container{ width:100%; max-width:980px; background:white; border-radius:20px; padding:20px; box-shadow:0 8px 30px rgba(0,0,0,0.12); }
+h1{ text-align:center;color:#ff4d88;margin:4px 0 12px;font-size:2rem;text-shadow:2px 2px #fff0f5; }
+.top{ display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; justify-content:center; }
+.camera-card{ flex:1 1 420px; min-width:300px; display:flex; flex-direction:column; align-items:center; padding:12px; border-radius:14px; }
+video{ width:100%; max-width:640px; border-radius:12px; border:6px solid var(--pink); box-shadow:0 6px 14px rgba(0,0,0,0.12); background:#000; }
+.controls{ margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center; }
+button, select{ background:var(--pink); color:white; border:none; padding:9px 14px; border-radius:14px; cursor:pointer; font-size:14px; }
+button:hover{ background:var(--pink-strong); } select{ background:white;color:#333;border:2px solid var(--pink); }
+
+/* preview */
+#preview{ margin-top:14px; display:grid; gap:8px; border-radius:12px; padding:10px; background:linear-gradient(180deg,#fff,#fff6fb); border:3px dashed var(--pink); position:relative; }
+.slot{ width:150px; height:150px; border-radius:10px; overflow:hidden; display:flex; justify-content:center; align-items:center; position:relative; background:#f0f0f0; }
+.slot img{ width:100%; height:100%; object-fit:cover; user-select:none; pointer-events:none; }
+.slot.frame-pink{ border:5px solid #ff99ac; border-radius:10px; }
+.slot.frame-polaroid{ border:4px solid #fff; padding-bottom:10px; border-radius:10px; background:white; box-sizing:border-box; }
+.slot.frame-gold{ border:6px ridge gold; border-radius:10px; }
+.slot.frame-purple{ border:5px solid #a855f7; border-radius:10px; }
+
+.instructions, .privacy {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #fff6fb;
+  border: 2px solid var(--pink);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.instructions h2, .privacy h2 {
+  color: var(--pink-strong);
+  margin-bottom: 10px;
+}
+
+.instructions ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.privacy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+</style>
+</head>
+<body>
+<div class="container">
+<h1>💖 Snap & Smile Photobooth 💖</h1>
+<div class="top">
+<div class="camera-card">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <div class="controls">
+    <button id="snap">📷 Capture</button>
+    <button id="clear">🧹 Clear</button>
+    <button id="download" style="display:none;">💾 Download</button>
+    <select id="layout">
+      <option value="none">Layout: None</option>
+      <option value="2x2">Layout: 2×2</option>
+      <option value="3x3">Layout: 3×3</option>
+      <option value="1x4">Layout: 1×4 Vertical</option>
+    </select>
+    <select id="frame">
+      <option value="none">Frame: None</option>
+      <option value="pink">Frame: Pink</option>
+      <option value="polaroid">Frame: White</option>
+      <option value="gold">Frame: Gold</option>
+      <option value="purple">Frame: Purple</option>
+    </select>
+  </div>
+  <div id="preview" aria-live="polite" aria-label="Photo preview"></div>
+</div>
+</div>
+
+<!-- Instructions Section -->
+<div class="instructions">
+  <h2>📸 How to Use</h2>
+  <ol>
+    <li>Allow camera access when prompted.</li>
+    <li>Choose a layout (2×2, 3×3, etc.) and frame style.</li>
+    <li>Click <b>📷 Capture</b> to take a photo.</li>
+    <li>Click <b>💾 Download</b> to save your photo.</li>
+    <li>Click <b>🧹 Clear</b> to reset and take again.</li>
+  </ol>
+</div>
+
+<!-- Privacy Section -->
+<div class="privacy">
+  <h2>🔒 Privacy Notice</h2>
+  <p>
+    This photobooth runs entirely in your browser. Your photos are 
+    <b>not uploaded</b> or stored on any server. All images stay 
+    on your device and are deleted when you clear or close the page.
+  </p>
+</div>
+
+</div>
+
+
+<script>
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const snapBtn=document.getElementById('snap');
+const clearBtn=document.getElementById('clear');
+const downloadBtn=document.getElementById('download');
+const layoutSelect=document.getElementById('layout');
+const frameSelect=document.getElementById('frame');
+const preview=document.getElementById('preview');
+
+let images=[];
+
+async function startCamera(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject=stream;
+  }catch(e){ alert('Camera access denied or unavailable'); }
+}
+startCamera();
+
+function renderPreview(){
+  const layout=layoutSelect.value;
+  let cols=1, rows=1;
+  switch(layout){
+    case "2x2": cols=2; rows=2; break;
+    case "3x3": cols=3; rows=3; break;
+    case "1x4": cols=1; rows=4; break;
+    default: cols=1; rows=1; break;
+  }
+  preview.style.gridTemplateColumns=`repeat(${cols},150px)`;
+  preview.style.gridTemplateRows=`repeat(${rows},150px)`;
+  preview.innerHTML='';
+  images.forEach(imgObj=>{
+    const slot=document.createElement('div');
+    slot.className='slot';
+    if(imgObj.frame!=='none') slot.classList.add('frame-'+imgObj.frame);
+    const img=new Image();
+    img.src=imgObj.src;
+    slot.appendChild(img);
+    preview.appendChild(slot);
+  });
+}
+
+snapBtn.addEventListener('click',()=>{
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const dataURL=canvas.toDataURL('image/png');
+  const selectedFrame=frameSelect.value;
+  images.push({src:dataURL, frame:selectedFrame});
+  renderPreview();
+  downloadBtn.style.display='inline-block';
+});
+
+clearBtn.addEventListener('click',()=>{ images=[]; renderPreview(); downloadBtn.style.display='none'; });
+layoutSelect.addEventListener('change', renderPreview);
+
+function drawFrame(ctx, x, y, w, h, frame, img=null) {
+  ctx.save();
+  switch(frame){
+    case "pink":
+      ctx.strokeStyle = "#ff99ac";
+      ctx.lineWidth = 15;
+      ctx.strokeRect(x, y, w, h);
+      break;
+
+    case "polaroid":
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 15; // kapal ng white border
+       ctx.strokeRect(x, y, w, h);
+      break;
+
+
+    case "gold":
+      ctx.strokeStyle = "gold";
+      ctx.lineWidth = 15;
+      ctx.strokeRect(x, y, w, h);
+      break;
+
+    case "purple":
+      ctx.strokeStyle = "#a855f7";
+      ctx.lineWidth = 15;
+      ctx.strokeRect(x, y, w, h);
+      break;
+  }
+  ctx.restore();
+}
+
+
+downloadBtn.addEventListener('click', async ()=>{
+  if(images.length===0){ alert('Capture at least one photo'); return; }
+  const layout=layoutSelect.value;
+  let cols=1, rows=1;
+  switch(layout){
+    case "2x2": cols=2; rows=2; break;
+    case "3x3": cols=3; rows=3; break;
+    case "1x4": cols=1; rows=4; break;
+    default: cols=1; rows=1; break;
+  }
+
+  const slotSize=300;
+  const finalCanvas=document.createElement('canvas');
+  finalCanvas.width=cols*slotSize;
+  finalCanvas.height=rows*slotSize;
+  const fctx=finalCanvas.getContext('2d');
+
+  // Wait for all images to load
+  await Promise.all(images.map(imgObj=>{
+    return new Promise(res=>{
+      const img=new Image();
+      img.src=imgObj.src;
+      img.onload=()=>{
+        const i=images.indexOf(imgObj);
+        const x=(i%cols)*slotSize;
+        const y=Math.floor(i/cols)*slotSize;
+        fctx.drawImage(img,x,y,slotSize,slotSize);
+        drawFrame(fctx,x,y,slotSize,slotSize,imgObj.frame);
+        res();
+      }
+    })
+  }));
+
+  const link=document.createElement('a');
+  link.download='snap-and-smile.png';
+  link.href=finalCanvas.toDataURL();
+  link.click();
+});
+</script>
+</body>
+</html>
